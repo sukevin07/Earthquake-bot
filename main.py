@@ -8,7 +8,7 @@ import requests
 import time
 
 API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-001"
-API_KEY = "CWA-738C42B9-49B2-412C-BD7C-080975813398"
+API_KEY = "CWA-6939BEE8-C910-4361-BC69-43F46EC3FD76"
 WEBHOOK_URL = "https://hook.eu2.make.com/wa0099sdc5iorkyfaf8yqhv84iab98af"
 
 last_eq_id = None  # 儲存上次處理的地震 ID，防止重複處理
@@ -45,7 +45,7 @@ def fetch_latest_earthquake():
                     # 構建 Webhook 要發送的訊息
                     message = {
                         "title": "新地震資料",
-                        "content": f"地震編號: {eq['earthquakeID']}\n震中: {eq['epicenter']}\n震度: {eq['magnitude']}\n時間: {eq['earthquakeTime']}"
+                        "content": f"地震編號: {eq['earthquakeID']}\n震央: {eq['epicenter']}\n震度: {eq['magnitude']}\n時間: {eq['earthquakeTime']}"
                     }
                     
                     # 發送 Webhook 通知
