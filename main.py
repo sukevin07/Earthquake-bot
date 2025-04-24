@@ -1,84 +1,67 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[ ]:
-
-
 import requests
-import time
+import json
+import os
 
-API_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0015-001"
 API_KEY = "CWA-6939BEE8-C910-4361-BC69-43F46EC3FD76"
 WEBHOOK_URL = "https://hook.eu2.make.com/wa0099sdc5iorkyfaf8yqhv84iab98af"
+CWB_API_URL = f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/E-A0016-001?Authorization={API_KEY}"
 
-last_eq_id = None  # 儲存上次處理的地震 ID，防止重複處理
+def load_last_event_id():
+    if os.path.exists("last_event_id.txt"):
+        with open("last_event_id.txt", "r") as f:
+            return f.read().strip()
+    return ""
+
+def save_last_event_id(event_id):
+    with open("last_event_id.txt", "w") as f:
+        f.write(event_id)
 
 def fetch_latest_earthquake():
-    global last_eq_id
-
+    print("抓取地震資料中…")
     try:
-        # 訪問 API 獲取資料
-        response = requests.get(API_URL, params={"Authorization": API_KEY})
-        data = response.json()
-
-        # 打印出 API 返回的資料結構
-        print("API 返回資料：", data)
-
-        # 檢查資料格式是否正確
-        if "records" in data and "earthquake" in data["records"]:
-            earthquake_data = data["records"]["earthquake"]
-            
-            # 如果沒有新的地震資料
-            if not earthquake_data:
-                print("目前無地震資料")
-                return
-            
-            # 處理每一筆地震資料
-            for eq in earthquake_data:
-                eq_id = eq.get('earthquakeID')
-
-                # 檢查是否已經處理過此地震
-                if eq_id != last_eq_id:
-                    # 更新 last_eq_id 為當前地震 ID
-                    last_eq_id = eq_id
-                    
-                    # 構建 Webhook 要發送的訊息
-                    message = {
-                        "title": "新地震資料",
-                        "content": f"地震編號: {eq['earthquakeID']}\n震央: {eq['epicenter']}\n震度: {eq['magnitude']}\n時間: {eq['earthquakeTime']}"
-                    }
-                    
-                    # 發送 Webhook 通知
-                    send_webhook(message)
-                    
-                    # 輸出處理過的地震資料
-                    print(f"處理新地震資料：{eq}")
-
-        else:
-            print("API 返回的資料格式異常或無地震資料")
-    
+        res = requests.get(CWB_API_URL)
+        data = res.json()
+        if "records" not in data or "earthquake" not in data["records"]:
+            print("No earthquake data found")
+            return None
+        records = data["records"]["earthquake"]
+        if not records:
+            print("No recent earthquakes")
+            return None
+        print("資料成功取得")
+        return records[0]
     except Exception as e:
-        print("抓取地震資料時發生錯誤：", e)
+        print("Error fetching data:", e)
+        return None
 
-def send_webhook(message):
+def send_to_webhook(earthquake):
+    info = earthquake["earthquakeInfo"]
+    payload = {
+        "location": info["epicenter"]["location"],
+        "magnitude": info["magnitude"]["value"],
+        "depth": info["depth"]["value"],
+        "time": info["originTime"],
+        "report": earthquake["reportContent"]
+    }
     try:
-        # 發送 POST 請求到 Webhook
-        response = requests.post(WEBHOOK_URL, json=message)
-        if response.status_code == 200:
-            print("Webhook 發送成功")
-        else:
-            print(f"Webhook 發送失敗，狀態碼：{response.status_code}")
+        res = requests.post(WEBHOOK_URL, json=payload)
+        print("Webhook sent:", res.status_code)
     except Exception as e:
-        print("發送 Webhook 時發生錯誤：", e)
+        print("Webhook Error:", e)
 
-# 持續每60秒檢查一次地震資料
-while True:
-    fetch_latest_earthquake()
-    time.sleep(60)  # 每60秒抓取一次
+def main():
+    last_event_id = load_last_event_id()
+    latest_eq = fetch_latest_earthquake()
+    if latest_eq is None:
+        print("No new earthquake detected.")
+        return
+    event_id = latest_eq["earthquakeNo"]
+    if event_id != last_event_id:
+        print("New earthquake detected:", event_id)
+        send_to_webhook(latest_eq)
+        save_last_event_id(event_id)
+    else:
+        print("No new earthquake.")
 
-
-# In[ ]:
-
-
-
-
+if __name__ == "__main__":
+    main()
